@@ -1,9 +1,14 @@
 {
   "name": "bingo",
   "version": "1.0.0",
-  "description": "",
-  "main": "script.js",
+  "description": "Multiplayer Bingo game built with Node.js, Socket.io and TypeScript",
+  "main": "dist/server.js",
   "scripts": {
+    "build:server": "tsc -p tsconfig.server.json",
+    "build:client": "tsc -p tsconfig.client.json",
+    "build": "npm run build:server && npm run build:client",
+    "start": "node dist/server.js",
+    "dev": "npm run build && node dist/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -13,5 +18,10 @@
   "dependencies": {
     "express": "^5.2.1",
     "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.15.3",
+    "typescript": "^5.8.3"
   }
 }
