@@ -35,6 +35,7 @@
     <main id="game-ui" class="app-container glass-panel force-hidden">
         <header>
             <h1 class="logo-text">BINGO</h1>
+            <p id="player-names" style="color: var(--secondary-color); margin-top: 10px; font-weight: bold; font-size: 1.1rem;"></p>
             <p id="room-status" style="color: #ccc; margin-top: 5px;">Waiting for opponent...</p>
         </header>
 
@@ -45,9 +46,6 @@
             </div>
             <!-- Manual draw panel: only visible to the host -->
             <div id="draw-panel" class="draw-panel hidden">
-                <input type="number" id="draw-input" placeholder="Enter number..." min="1" class="glass-panel-inner"
-                    style="color: white; padding: 10px; border: 1px solid var(--glass-border); background: transparent; width: 140px; font-size: 1rem;">
-                <button id="draw-btn" class="btn primary-btn" style="padding: 10px 20px;">Draw</button>
                 <p id="draw-error" style="color: #ff007f; font-size: 0.85rem; margin: 0;"></p>
             </div>
         </section>
