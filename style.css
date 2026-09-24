@@ -336,6 +336,7 @@ header {
     color: var(--secondary-color);
     text-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
     padding-bottom: 6px;
+    opacity: 0.3;
 }
 
 .board-header.lit-up {
@@ -343,6 +344,7 @@ header {
     text-shadow: 0 0 20px #ff007f, 0 0 40px #ff007f;
     transform: scale(1.2);
     transition: all 0.3s ease;
+    opacity: 1;
 }
 
 .bingo-cell {

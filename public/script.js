@@ -30,14 +30,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const lobbyMessage = getEl('lobby-message');
     // ── Game refs ─────────────────────────────────────────────────────────────
     const roomStatus = getEl('room-status');
+    const playerNamesEl = getEl('player-names');
     const winnerNameDisplay = getEl('winner-name-display');
     const boardElement = getEl('bingo-board');
     const currentDrawElement = getEl('current-draw');
     const calledNumbersEl = getEl('called-numbers');
     const winMessage = getEl('win-message');
-    const drawPanel = getEl('draw-panel');
-    const drawInput = getEl('draw-input');
-    const drawBtn = getEl('draw-btn');
     const drawError = getEl('draw-error');
     const restartBtn = getEl('restart-btn');
     // ── State ─────────────────────────────────────────────────────────────────
@@ -49,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let gameOver = false;
     let currentRoom = null;
     let isHost = false;
+    let isMyTurn = false;
     // ── Join ──────────────────────────────────────────────────────────────────
     joinBtn.addEventListener('click', () => {
         const playerName = playerNameInput.value.trim();
@@ -66,26 +65,11 @@ document.addEventListener('DOMContentLoaded', () => {
         lobby.classList.add('force-hidden');
         gameUI.classList.remove('force-hidden');
         gameUI.style.display = 'grid';
+        playerNamesEl.textContent = playerName;
         roomStatus.textContent = 'Waiting for opponent to join...';
         socket.emit('joinRoom', { roomId, playerName, maxNumber: parsedMax });
         currentRoom = roomId;
     });
-    // ── Draw panel ────────────────────────────────────────────────────────────
-    drawBtn.addEventListener('click', () => submitDraw());
-    drawInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter')
-            submitDraw();
-    });
-    function submitDraw() {
-        const num = parseInt(drawInput.value, 10);
-        drawError.textContent = '';
-        if (isNaN(num) || num < 1 || num > maxNumber) {
-            drawError.textContent = `Enter a number between 1 and ${maxNumber}.`;
-            return;
-        }
-        socket.emit('drawNumber', { roomId: currentRoom, number: num });
-        drawInput.value = '';
-    }
     // ── Restart ───────────────────────────────────────────────────────────────
     restartBtn.addEventListener('click', () => {
         if (currentRoom) {
@@ -101,31 +85,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     socket.on('roomUpdated', ({ players, gameStarted: _started, hostId }) => {
         isHost = socket.id === hostId;
+        const me = players.find(p => p.id === socket.id);
+        playerNamesEl.textContent = me?.name ?? playerNameInput.value.trim();
         if (players.length === 1) {
             roomStatus.textContent = 'Waiting for opponent to join...';
-        }
-        else if (players.length >= 2) {
-            const opponent = players.find(p => p.id !== socket.id);
-            roomStatus.textContent = `Playing against: ${opponent?.name ?? ''}`;
         }
     });
     socket.on('gameStarted', ({ maxNumber: serverMax }) => {
         maxNumber = serverMax;
         RANGES = buildRanges(maxNumber);
-        drawInput.max = String(maxNumber);
         initGame();
     });
     socket.on('turnChanged', ({ currentPlayerId, currentPlayerName }) => {
-        const isMyTurn = socket.id === currentPlayerId;
-        drawPanel.classList.remove('hidden');
+        isMyTurn = socket.id === currentPlayerId;
+        drawError.textContent = '';
         if (isMyTurn) {
-            drawInput.disabled = false;
-            drawBtn.disabled = false;
-            roomStatus.textContent = 'Your turn to draw!';
+            roomStatus.textContent = 'Your turn to draw! Click an uncalled number on your board.';
         }
         else {
-            drawInput.disabled = true;
-            drawBtn.disabled = true;
             roomStatus.textContent = `Waiting for ${currentPlayerName} to draw...`;
         }
     });
@@ -178,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const h = document.createElement('div');
             h.classList.add('board-header');
             h.id = `header-${idx}`;
-            h.textContent = '_';
+            h.textContent = BINGO_LETTERS[idx];
             boardElement.appendChild(h);
         });
         // Cells (row-major order)
@@ -200,9 +177,23 @@ document.addEventListener('DOMContentLoaded', () => {
         if (gameOver)
             return;
         const val = parseInt(cellEl.dataset['val'] ?? '0', 10);
-        if (calledNumbers.has(val) && !cellEl.classList.contains('marked')) {
-            cellEl.classList.add('marked');
-            checkForWin();
+        if (calledNumbers.has(val)) {
+            if (!cellEl.classList.contains('marked')) {
+                cellEl.classList.add('marked');
+                checkForWin();
+            }
+        }
+        else {
+            if (isMyTurn) {
+                drawError.textContent = '';
+                // Optimistically mark the cell so the user doesn't have to click it again
+                cellEl.classList.add('marked');
+                checkForWin();
+                socket.emit('drawNumber', { roomId: currentRoom, number: val });
+            }
+            else {
+                drawError.textContent = "It's not your turn!";
+            }
         }
     }
     function handleNumberDrawn(drawnNumber, letter) {
@@ -296,7 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 else {
                     header.classList.remove('lit-up');
-                    header.textContent = '_';
+                    header.textContent = BINGO_LETTERS[i];
                 }
             }
         }
