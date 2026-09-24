@@ -59,28 +59,65 @@ function startGame(roomId) {
 // ─── Socket Handlers ──────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
-    socket.on('joinRoom', ({ roomId, playerName, maxNumber }) => {
-        socket.join(roomId);
-        if (!rooms[roomId]) {
-            const max = Math.max(25, Number(maxNumber) || 25);
-            rooms[roomId] = createGameState(max);
+    socket.on('createRoom', ({ roomId, playerName, maxNumber }) => {
+        const cleanRoomId = (roomId || '').trim();
+        const cleanName = (playerName || '').trim();
+        const parsedMax = Number(maxNumber);
+        if (!cleanName || !cleanRoomId) {
+            socket.emit('roomError', { message: 'Please enter both your name and a room ID.' });
+            return;
         }
-        const room = rooms[roomId];
+        if (isNaN(parsedMax) || parsedMax < 25) {
+            socket.emit('roomError', { message: 'Max number must be at least 25.' });
+            return;
+        }
+        const existingRoom = rooms[cleanRoomId];
+        if (existingRoom && existingRoom.players.length > 0) {
+            socket.emit('roomError', { message: `Room "${cleanRoomId}" already exists! Join it or choose a different ID.` });
+            return;
+        }
+        socket.join(cleanRoomId);
+        rooms[cleanRoomId] = createGameState(parsedMax);
+        const room = rooms[cleanRoomId];
+        room.hostId = socket.id;
+        room.players.push({ id: socket.id, name: cleanName });
+        console.log(`${cleanName} created room ${cleanRoomId} (max: ${room.maxNumber})`);
+        io.to(cleanRoomId).emit('roomUpdated', {
+            players: room.players,
+            gameStarted: room.gameStarted,
+            hostId: room.hostId,
+        });
+    });
+    socket.on('joinRoom', ({ roomId, playerName }) => {
+        const cleanRoomId = (roomId || '').trim();
+        const cleanName = (playerName || '').trim();
+        if (!cleanName || !cleanRoomId) {
+            socket.emit('roomError', { message: 'Please enter both your name and a room ID.' });
+            return;
+        }
+        const room = rooms[cleanRoomId];
+        if (!room || room.players.length === 0) {
+            socket.emit('roomError', { message: `Room "${cleanRoomId}" does not exist. Please create it first.` });
+            return;
+        }
         if (room.players.length >= 2) {
             socket.emit('roomFull');
             return;
         }
-        room.players.push({ id: socket.id, name: playerName });
-        if (!room.hostId)
-            room.hostId = socket.id;
-        console.log(`${playerName} joined room ${roomId} (max: ${room.maxNumber})`);
-        io.to(roomId).emit('roomUpdated', {
+        if (room.gameStarted) {
+            socket.emit('roomError', { message: `Game is already in progress in room "${cleanRoomId}".` });
+            return;
+        }
+        socket.join(cleanRoomId);
+        room.players.push({ id: socket.id, name: cleanName });
+        console.log(`${cleanName} joined room ${cleanRoomId} (max: ${room.maxNumber})`);
+        io.to(cleanRoomId).emit('roomUpdated', {
             players: room.players,
             gameStarted: room.gameStarted,
             hostId: room.hostId,
         });
         if (room.players.length === 2 && !room.gameStarted) {
-            startGame(roomId);
+            startGame(cleanRoomId);
         }
     });
     socket.on('drawNumber', ({ roomId, number }) => {

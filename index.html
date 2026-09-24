@@ -20,16 +20,55 @@
 
     <div id="lobby" class="app-container glass-panel">
         <h1 class="logo-text">BINGO</h1>
-        <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px; width: 100%;">
-            <input type="text" id="player-name" placeholder="Your Name" class="glass-panel-inner"
-                style="color: white; padding: 10px; border: 1px solid var(--glass-border); background: transparent;">
-            <input type="text" id="room-id" placeholder="Room ID" class="glass-panel-inner"
-                style="color: white; padding: 10px; border: 1px solid var(--glass-border); background: transparent;">
-            <input type="number" id="max-number" placeholder="Max Number (min 25)" min="25" value="25" class="glass-panel-inner"
-                style="color: white; padding: 10px; border: 1px solid var(--glass-border); background: transparent;">
-            <button id="join-btn" class="btn primary-btn">Join Game</button>
+
+        <div class="lobby-field">
+            <label for="player-name" class="field-label">Your Name</label>
+            <input type="text" id="player-name" placeholder="Enter your name" class="glass-panel-inner lobby-input" maxlength="20" autocomplete="off">
         </div>
-        <p id="lobby-message" style="margin-top: 15px; color: #ff007f;"></p>
+
+        <div class="lobby-tabs">
+            <button type="button" id="tab-create" class="lobby-tab active">➕ Create Room</button>
+            <button type="button" id="tab-join" class="lobby-tab">🔗 Join Room</button>
+        </div>
+
+        <!-- Create Room Panel -->
+        <div id="panel-create" class="lobby-panel">
+            <div class="lobby-field">
+                <label for="create-room-id" class="field-label">Room ID</label>
+                <div class="input-with-action">
+                    <input type="text" id="create-room-id" placeholder="e.g. room123" class="glass-panel-inner lobby-input" maxlength="20" autocomplete="off">
+                    <button type="button" id="btn-random-room" class="chip-btn" title="Generate Random Room ID">🎲</button>
+                </div>
+            </div>
+
+            <div class="lobby-field">
+                <div class="field-label-row">
+                    <label class="field-label">Max Numbers</label>
+                    <span class="field-hint">(Game range: 1 to N)</span>
+                </div>
+                <div class="preset-chips">
+                    <button type="button" class="preset-chip active" data-val="25">25</button>
+                    <button type="button" class="preset-chip" data-val="50">50</button>
+                    <button type="button" class="preset-chip" data-val="75">75</button>
+                    <button type="button" class="preset-chip" data-val="100">100</button>
+                </div>
+                <input type="number" id="create-max-number" placeholder="Custom Max (min 25)" min="25" max="500" value="25" class="glass-panel-inner lobby-input" style="margin-top: 8px;">
+            </div>
+
+            <button id="create-room-btn" class="btn primary-btn lobby-submit-btn">Create Room</button>
+        </div>
+
+        <!-- Join Room Panel -->
+        <div id="panel-join" class="lobby-panel hidden">
+            <div class="lobby-field">
+                <label for="join-room-id" class="field-label">Room ID</label>
+                <input type="text" id="join-room-id" placeholder="Enter Room ID to join" class="glass-panel-inner lobby-input" maxlength="20" autocomplete="off">
+            </div>
+            <p class="panel-note">The room creator sets the max number.</p>
+            <button id="join-room-btn" class="btn primary-btn lobby-submit-btn">Join Room</button>
+        </div>
+
+        <p id="lobby-message" class="lobby-msg"></p>
     </div>
 
     <main id="game-ui" class="app-container glass-panel force-hidden">

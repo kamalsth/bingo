@@ -23,6 +23,7 @@ interface SocketClient {
     id: string;
     emit(event: string, data?: unknown): void;
     on(event: 'roomFull', cb: () => void): void;
+    on(event: 'roomError', cb: (data: { message: string }) => void): void;
     on(event: 'roomUpdated', cb: (data: { players: Player[]; gameStarted: boolean; hostId: string }) => void): void;
     on(event: 'gameStarted', cb: (data: { maxNumber: number }) => void): void;
     on(event: 'numberDrawn', cb: (data: { drawnNumber: number; letter: string }) => void): void;
@@ -57,13 +58,21 @@ const socket: SocketClient = io();
 
 document.addEventListener('DOMContentLoaded', () => {
     // ── Lobby refs ────────────────────────────────────────────────────────────
-    const lobby            = getEl<HTMLDivElement>('lobby');
-    const gameUI           = getEl<HTMLElement>('game-ui');
-    const playerNameInput  = getEl<HTMLInputElement>('player-name');
-    const roomIdInput      = getEl<HTMLInputElement>('room-id');
-    const maxNumberInput   = getEl<HTMLInputElement>('max-number');
-    const joinBtn          = getEl<HTMLButtonElement>('join-btn');
-    const lobbyMessage     = getEl<HTMLParagraphElement>('lobby-message');
+    const lobby              = getEl<HTMLDivElement>('lobby');
+    const gameUI             = getEl<HTMLElement>('game-ui');
+    const playerNameInput    = getEl<HTMLInputElement>('player-name');
+    const tabCreate          = getEl<HTMLButtonElement>('tab-create');
+    const tabJoin            = getEl<HTMLButtonElement>('tab-join');
+    const panelCreate        = getEl<HTMLDivElement>('panel-create');
+    const panelJoin          = getEl<HTMLDivElement>('panel-join');
+    const createRoomIdInput  = getEl<HTMLInputElement>('create-room-id');
+    const joinRoomIdInput    = getEl<HTMLInputElement>('join-room-id');
+    const btnRandomRoom      = getEl<HTMLButtonElement>('btn-random-room');
+    const createMaxNumber    = getEl<HTMLInputElement>('create-max-number');
+    const createRoomBtn      = getEl<HTMLButtonElement>('create-room-btn');
+    const joinRoomBtn        = getEl<HTMLButtonElement>('join-room-btn');
+    const presetChips        = document.querySelectorAll<HTMLButtonElement>('.preset-chip');
+    const lobbyMessage       = getEl<HTMLParagraphElement>('lobby-message');
 
     // ── Game refs ─────────────────────────────────────────────────────────────
     const roomStatus          = getEl<HTMLParagraphElement>('room-status');
@@ -87,30 +96,119 @@ document.addEventListener('DOMContentLoaded', () => {
     let isHost = false;
     let isMyTurn = false;
 
-    // ── Join ──────────────────────────────────────────────────────────────────
-    joinBtn.addEventListener('click', () => {
-        const playerName = playerNameInput.value.trim();
-        const roomId     = roomIdInput.value.trim();
-        const parsedMax  = parseInt(maxNumberInput.value, 10);
+    // ── Lobby Tab Switcher ───────────────────────────────────────────────────
+    tabCreate.addEventListener('click', () => {
+        tabCreate.classList.add('active');
+        tabJoin.classList.remove('active');
+        panelCreate.classList.remove('hidden');
+        panelJoin.classList.add('hidden');
+        lobbyMessage.textContent = '';
+    });
 
-        if (!playerName || !roomId) {
-            lobbyMessage.textContent = 'Please enter both name and room ID.';
+    tabJoin.addEventListener('click', () => {
+        tabJoin.classList.add('active');
+        tabCreate.classList.remove('active');
+        panelJoin.classList.remove('hidden');
+        panelCreate.classList.add('hidden');
+        lobbyMessage.textContent = '';
+    });
+
+    // ── Random Room Generator ─────────────────────────────────────────────────
+    btnRandomRoom.addEventListener('click', () => {
+        const rand = 'room-' + Math.floor(1000 + Math.random() * 9000);
+        createRoomIdInput.value = rand;
+        createRoomIdInput.focus();
+    });
+
+    // ── Max Number Presets ────────────────────────────────────────────────────
+    presetChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            presetChips.forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            const val = chip.dataset['val'];
+            if (val) {
+                createMaxNumber.value = val;
+            }
+        });
+    });
+
+    createMaxNumber.addEventListener('input', () => {
+        const currentVal = createMaxNumber.value.trim();
+        presetChips.forEach(chip => {
+            if (chip.dataset['val'] === currentVal) {
+                chip.classList.add('active');
+            } else {
+                chip.classList.remove('active');
+            }
+        });
+    });
+
+    // ── Create Room ───────────────────────────────────────────────────────────
+    createRoomBtn.addEventListener('click', () => {
+        const playerName = playerNameInput.value.trim();
+        const roomId     = createRoomIdInput.value.trim();
+        const parsedMax  = parseInt(createMaxNumber.value, 10);
+
+        if (!playerName) {
+            lobbyMessage.textContent = 'Please enter your name.';
+            playerNameInput.focus();
+            return;
+        }
+        if (!roomId) {
+            lobbyMessage.textContent = 'Please enter a Room ID.';
+            createRoomIdInput.focus();
             return;
         }
         if (isNaN(parsedMax) || parsedMax < 25) {
             lobbyMessage.textContent = 'Max number must be at least 25.';
+            createMaxNumber.focus();
             return;
         }
 
-        // Hide lobby immediately — don't wait for server roundtrip
         lobby.classList.add('force-hidden');
         gameUI.classList.remove('force-hidden');
         gameUI.style.display = 'grid';
         playerNamesEl.textContent = playerName;
-        roomStatus.textContent = 'Waiting for opponent to join...';
+        roomStatus.textContent = `Room "${roomId}" • Waiting for opponent to join...`;
 
-        socket.emit('joinRoom', { roomId, playerName, maxNumber: parsedMax });
+        socket.emit('createRoom', { roomId, playerName, maxNumber: parsedMax });
         currentRoom = roomId;
+    });
+
+    // ── Join Room ─────────────────────────────────────────────────────────────
+    joinRoomBtn.addEventListener('click', () => {
+        const playerName = playerNameInput.value.trim();
+        const roomId     = joinRoomIdInput.value.trim();
+
+        if (!playerName) {
+            lobbyMessage.textContent = 'Please enter your name.';
+            playerNameInput.focus();
+            return;
+        }
+        if (!roomId) {
+            lobbyMessage.textContent = 'Please enter a Room ID to join.';
+            joinRoomIdInput.focus();
+            return;
+        }
+
+        lobby.classList.add('force-hidden');
+        gameUI.classList.remove('force-hidden');
+        gameUI.style.display = 'grid';
+        playerNamesEl.textContent = playerName;
+        roomStatus.textContent = `Joining room "${roomId}"...`;
+
+        socket.emit('joinRoom', { roomId, playerName });
+        currentRoom = roomId;
+    });
+
+    // Enter key shortcuts
+    [playerNameInput, createRoomIdInput, createMaxNumber].forEach(input => {
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') createRoomBtn.click();
+        });
+    });
+    joinRoomIdInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') joinRoomBtn.click();
     });
 
     // ── Restart ───────────────────────────────────────────────────────────────
@@ -121,8 +219,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ── Socket events ─────────────────────────────────────────────────────────
+    socket.on('roomError', ({ message }) => {
+        gameUI.classList.add('force-hidden');
+        lobby.classList.remove('force-hidden');
+        lobbyMessage.textContent = message;
+    });
+
     socket.on('roomFull', () => {
-        // Restore lobby so user can try a different room
         gameUI.classList.add('force-hidden');
         lobby.classList.remove('force-hidden');
         lobbyMessage.textContent = 'Room is full! Try a different one.';
@@ -134,7 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
         playerNamesEl.textContent = me?.name ?? playerNameInput.value.trim();
 
         if (players.length === 1) {
-            roomStatus.textContent = 'Waiting for opponent to join...';
+            roomStatus.textContent = `Room "${currentRoom}" • Waiting for opponent to join...`;
         }
     });
 
@@ -206,12 +309,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderBoard(): void {
-        // Headers
+        // Headers (hidden initially; shown one by one as lines are completed)
         BINGO_LETTERS.forEach((_, idx) => {
             const h = document.createElement('div');
             h.classList.add('board-header');
             h.id = `header-${idx}`;
-            h.textContent = BINGO_LETTERS[idx];
+            h.textContent = '';
             boardElement.appendChild(h);
         });
 
@@ -324,7 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (diag2Win) { completedLines++; diag2.forEach(c => c.classList.add('strike-diag-2')); }
 
-        // Update BINGO header letters
+        // Update BINGO header letters (revealed one by one per completed line)
         for (let i = 0; i < 5; i++) {
             const header = document.getElementById(`header-${i}`);
             if (header) {
@@ -333,7 +436,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     header.textContent = BINGO_LETTERS[i];
                 } else {
                     header.classList.remove('lit-up');
-                    header.textContent = BINGO_LETTERS[i];
+                    header.textContent = '';
                 }
             }
         }

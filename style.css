@@ -101,11 +101,11 @@ body {
 
 /* ─── Lobby ──────────────────────────────────────── */
 #lobby {
-    width: 90%;
-    max-width: 360px;
-    padding: 30px 24px !important;
+    width: 92%;
+    max-width: 410px;
+    padding: 32px 24px !important;
     margin: auto;
-    margin-top: 10vh !important;
+    margin-top: 8vh !important;
     height: auto !important;
     display: flex !important;
     flex-direction: column;
@@ -114,16 +114,190 @@ body {
 }
 
 #lobby h1 {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 }
 
-#lobby > div {
+.lobby-field {
+    width: 100%;
+    margin-bottom: 12px;
+}
+
+.field-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #bbb;
+    margin-bottom: 6px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+}
+
+.field-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 6px;
+}
+
+.field-hint {
+    font-size: 0.75rem;
+    color: #888;
+    text-transform: none;
+    font-weight: normal;
+}
+
+.lobby-input {
+    width: 100%;
+    color: white;
+    padding: 12px 14px;
+    border: 1px solid var(--glass-border);
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.lobby-input:focus {
+    outline: none;
+    border-color: var(--secondary-color);
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.35);
+}
+
+.lobby-tabs {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    display: flex;
+    padding: 4px;
+    gap: 4px;
+    width: 100%;
+    margin: 8px 0 16px 0;
+}
+
+.lobby-tab {
+    flex: 1;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: #888;
+    font-family: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.lobby-tab:hover {
+    color: #fff;
+}
+
+.lobby-tab.active {
+    background: linear-gradient(135deg, rgba(255, 0, 127, 0.4), rgba(0, 240, 255, 0.3));
+    color: #fff;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.lobby-panel {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    animation: fadeIn 0.25s ease;
+}
+
+.lobby-panel.hidden {
+    display: none;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.input-with-action {
+    display: flex;
+    gap: 8px;
     width: 100%;
 }
 
-#lobby input,
-#lobby button {
+.chip-btn {
+    padding: 0 14px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 1.2rem;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.chip-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+}
+
+.preset-chips {
+    display: flex;
+    gap: 8px;
     width: 100%;
+}
+
+.preset-chip {
+    flex: 1;
+    padding: 8px 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    color: #ddd;
+    font-family: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.preset-chip:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+.preset-chip.active {
+    background: var(--secondary-color);
+    color: #0d0a21;
+    border-color: var(--secondary-color);
+    box-shadow: 0 0 14px rgba(0, 240, 255, 0.6);
+}
+
+.panel-note {
+    font-size: 0.82rem;
+    color: #999;
+    font-style: italic;
+    margin-top: -2px;
+    text-align: center;
+}
+
+.lobby-submit-btn {
+    width: 100%;
+    margin-top: 4px;
+}
+
+.lobby-msg {
+    margin-top: 14px;
+    color: #ff007f;
+    font-weight: 600;
+    font-size: 0.88rem;
+    min-height: 1.2em;
+    text-align: center;
 }
 
 /* ─── Main Game Container ────────────────────────── */
@@ -333,18 +507,29 @@ header {
     align-items: center;
     font-size: clamp(1.3rem, 3.5vw, 2rem);
     font-weight: 900;
-    color: var(--secondary-color);
-    text-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+    color: #fff;
     padding-bottom: 6px;
-    opacity: 0.3;
+    height: clamp(34px, 5vw, 44px);
+    opacity: 0;
+    visibility: hidden;
+    transform: scale(0.6);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    user-select: none;
 }
 
 .board-header.lit-up {
+    opacity: 1;
+    visibility: visible;
     color: #fff;
     text-shadow: 0 0 20px #ff007f, 0 0 40px #ff007f;
     transform: scale(1.2);
-    transition: all 0.3s ease;
-    opacity: 1;
+    animation: letterPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes letterPop {
+    0%   { transform: scale(0.4); opacity: 0; }
+    60%  { transform: scale(1.35); opacity: 1; }
+    100% { transform: scale(1.2); opacity: 1; }
 }
 
 .bingo-cell {
