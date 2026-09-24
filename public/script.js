@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const roomStatus = getEl('room-status');
     const startEarlyBtn = getEl('start-early-btn');
     const playerNamesEl = getEl('player-names');
+    const avatarInitialEl = getEl('avatar-initial');
     const winnerNameDisplay = getEl('winner-name-display');
     const boardElement = getEl('bingo-board');
     const currentDrawElement = getEl('current-draw');
@@ -59,6 +60,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentRoom = null;
     let isHost = false;
     let isMyTurn = false;
+    function updateProfile(name) {
+        const clean = name.trim();
+        playerNamesEl.textContent = clean || 'Player';
+        avatarInitialEl.textContent = clean ? clean.charAt(0).toUpperCase() : '?';
+    }
     // ── Lobby Tab Switcher ───────────────────────────────────────────────────
     tabCreate.addEventListener('click', () => {
         tabCreate.classList.add('active');
@@ -133,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
         lobby.classList.add('force-hidden');
         gameUI.classList.remove('force-hidden');
         gameUI.style.display = 'grid';
-        playerNamesEl.textContent = playerName;
+        updateProfile(playerName);
         startEarlyBtn.classList.add('hidden');
         startEarlyBtn.style.display = 'none';
         roomStatus.textContent = `Room "${roomId}" • Waiting for players (1/${selectedMaxPlayers})...`;
@@ -162,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
         lobby.classList.add('force-hidden');
         gameUI.classList.remove('force-hidden');
         gameUI.style.display = 'grid';
-        playerNamesEl.textContent = playerName;
+        updateProfile(playerName);
         startEarlyBtn.classList.add('hidden');
         startEarlyBtn.style.display = 'none';
         roomStatus.textContent = `Joining room "${roomId}"...`;
@@ -211,7 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.on('roomUpdated', ({ players, gameStarted: started, hostId, maxPlayers }) => {
         isHost = socket.id === hostId;
         const me = players.find(p => p.id === socket.id);
-        playerNamesEl.textContent = me?.name ?? playerNameInput.value.trim();
+        updateProfile(me?.name ?? playerNameInput.value.trim());
         if (!started) {
             const target = maxPlayers || selectedMaxPlayers || 2;
             if (players.length < target) {

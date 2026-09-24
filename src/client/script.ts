@@ -78,7 +78,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Game refs ─────────────────────────────────────────────────────────────
     const roomStatus          = getEl<HTMLParagraphElement>('room-status');
     const startEarlyBtn       = getEl<HTMLButtonElement>('start-early-btn');
-    const playerNamesEl       = getEl<HTMLParagraphElement>('player-names');
+    const playerNamesEl       = getEl<HTMLSpanElement>('player-names');
+    const avatarInitialEl     = getEl<HTMLSpanElement>('avatar-initial');
     const winnerNameDisplay   = getEl<HTMLHeadingElement>('winner-name-display');
     const boardElement        = getEl<HTMLDivElement>('bingo-board');
     const currentDrawElement  = getEl<HTMLHeadingElement>('current-draw');
@@ -98,6 +99,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentRoom: string | null = null;
     let isHost = false;
     let isMyTurn = false;
+
+    function updateProfile(name: string): void {
+        const clean = name.trim();
+        playerNamesEl.textContent = clean || 'Player';
+        avatarInitialEl.textContent = clean ? clean.charAt(0).toUpperCase() : '?';
+    }
 
     // ── Lobby Tab Switcher ───────────────────────────────────────────────────
     tabCreate.addEventListener('click', () => {
@@ -180,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
         lobby.classList.add('force-hidden');
         gameUI.classList.remove('force-hidden');
         gameUI.style.display = 'grid';
-        playerNamesEl.textContent = playerName;
+        updateProfile(playerName);
         startEarlyBtn.classList.add('hidden');
         startEarlyBtn.style.display = 'none';
         roomStatus.textContent = `Room "${roomId}" • Waiting for players (1/${selectedMaxPlayers})...`;
@@ -213,7 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
         lobby.classList.add('force-hidden');
         gameUI.classList.remove('force-hidden');
         gameUI.style.display = 'grid';
-        playerNamesEl.textContent = playerName;
+        updateProfile(playerName);
         startEarlyBtn.classList.add('hidden');
         startEarlyBtn.style.display = 'none';
         roomStatus.textContent = `Joining room "${roomId}"...`;
@@ -267,7 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.on('roomUpdated', ({ players, gameStarted: started, hostId, maxPlayers }) => {
         isHost = socket.id === hostId;
         const me = players.find(p => p.id === socket.id);
-        playerNamesEl.textContent = me?.name ?? playerNameInput.value.trim();
+        updateProfile(me?.name ?? playerNameInput.value.trim());
 
         if (!started) {
             const target = maxPlayers || selectedMaxPlayers || 2;
