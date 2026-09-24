@@ -24,7 +24,7 @@ interface SocketClient {
     emit(event: string, data?: unknown): void;
     on(event: 'roomFull', cb: () => void): void;
     on(event: 'roomError', cb: (data: { message: string }) => void): void;
-    on(event: 'roomUpdated', cb: (data: { players: Player[]; gameStarted: boolean; hostId: string }) => void): void;
+    on(event: 'roomUpdated', cb: (data: { players: Player[]; gameStarted: boolean; hostId: string; maxPlayers?: number }) => void): void;
     on(event: 'gameStarted', cb: (data: { maxNumber: number }) => void): void;
     on(event: 'numberDrawn', cb: (data: { drawnNumber: number; letter: string }) => void): void;
     on(event: 'drawError', cb: (data: { message: string }) => void): void;
@@ -72,10 +72,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const createRoomBtn      = getEl<HTMLButtonElement>('create-room-btn');
     const joinRoomBtn        = getEl<HTMLButtonElement>('join-room-btn');
     const presetChips        = document.querySelectorAll<HTMLButtonElement>('.preset-chip');
+    const playerChips        = document.querySelectorAll<HTMLButtonElement>('.player-chip');
     const lobbyMessage       = getEl<HTMLParagraphElement>('lobby-message');
 
     // ── Game refs ─────────────────────────────────────────────────────────────
     const roomStatus          = getEl<HTMLParagraphElement>('room-status');
+    const startEarlyBtn       = getEl<HTMLButtonElement>('start-early-btn');
     const playerNamesEl       = getEl<HTMLParagraphElement>('player-names');
     const winnerNameDisplay   = getEl<HTMLHeadingElement>('winner-name-display');
     const boardElement        = getEl<HTMLDivElement>('bingo-board');
@@ -89,6 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const BINGO_LETTERS: readonly string[] = ['B', 'I', 'N', 'G', 'O'];
     let RANGES: BingoRange[] = [];
     let maxNumber = 25;
+    let selectedMaxPlayers = 2;
     let board: number[][] = [];
     let calledNumbers = new Set<number>();
     let gameOver = false;
@@ -143,6 +146,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // ── Player Count Presets ──────────────────────────────────────────────────
+    playerChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            playerChips.forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            selectedMaxPlayers = parseInt(chip.dataset['players'] ?? '2', 10);
+        });
+    });
+
     // ── Create Room ───────────────────────────────────────────────────────────
     createRoomBtn.addEventListener('click', () => {
         const playerName = playerNameInput.value.trim();
@@ -169,9 +181,14 @@ document.addEventListener('DOMContentLoaded', () => {
         gameUI.classList.remove('force-hidden');
         gameUI.style.display = 'grid';
         playerNamesEl.textContent = playerName;
-        roomStatus.textContent = `Room "${roomId}" • Waiting for opponent to join...`;
+        roomStatus.textContent = `Room "${roomId}" • Waiting for players (1/${selectedMaxPlayers})...`;
 
-        socket.emit('createRoom', { roomId, playerName, maxNumber: parsedMax });
+        socket.emit('createRoom', {
+            roomId,
+            playerName,
+            maxNumber: parsedMax,
+            maxPlayers: selectedMaxPlayers
+        });
         currentRoom = roomId;
     });
 
@@ -211,10 +228,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter') joinRoomBtn.click();
     });
 
-    // ── Restart ───────────────────────────────────────────────────────────────
+    // ── Restart & Start Early ─────────────────────────────────────────────────
     restartBtn.addEventListener('click', () => {
         if (currentRoom) {
             socket.emit('restartGame', { roomId: currentRoom });
+        }
+    });
+
+    startEarlyBtn.addEventListener('click', () => {
+        if (currentRoom && isHost) {
+            socket.emit('startGameEarly', { roomId: currentRoom });
         }
     });
 
@@ -223,27 +246,44 @@ document.addEventListener('DOMContentLoaded', () => {
         gameUI.classList.add('force-hidden');
         lobby.classList.remove('force-hidden');
         lobbyMessage.textContent = message;
+        startEarlyBtn.classList.add('hidden');
     });
 
     socket.on('roomFull', () => {
         gameUI.classList.add('force-hidden');
         lobby.classList.remove('force-hidden');
         lobbyMessage.textContent = 'Room is full! Try a different one.';
+        startEarlyBtn.classList.add('hidden');
     });
 
-    socket.on('roomUpdated', ({ players, gameStarted: _started, hostId }) => {
+    socket.on('roomUpdated', ({ players, gameStarted: started, hostId, maxPlayers }) => {
         isHost = socket.id === hostId;
         const me = players.find(p => p.id === socket.id);
         playerNamesEl.textContent = me?.name ?? playerNameInput.value.trim();
 
-        if (players.length === 1) {
-            roomStatus.textContent = `Room "${currentRoom}" • Waiting for opponent to join...`;
+        if (!started) {
+            const target = maxPlayers || selectedMaxPlayers || 2;
+            if (players.length < target) {
+                roomStatus.textContent = `Room "${currentRoom}" • Waiting for players (${players.length}/${target})...`;
+                if (isHost && players.length >= 2) {
+                    startEarlyBtn.classList.remove('hidden');
+                    startEarlyBtn.textContent = `Start Game Now (${players.length} players)`;
+                } else {
+                    startEarlyBtn.classList.add('hidden');
+                }
+            } else {
+                roomStatus.textContent = 'All players joined! Starting game...';
+                startEarlyBtn.classList.add('hidden');
+            }
+        } else {
+            startEarlyBtn.classList.add('hidden');
         }
     });
 
     socket.on('gameStarted', ({ maxNumber: serverMax }) => {
         maxNumber = serverMax;
         RANGES = buildRanges(maxNumber);
+        startEarlyBtn.classList.add('hidden');
         initGame();
     });
 
