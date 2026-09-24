@@ -20,6 +20,7 @@
 }
 
 /* Utility — beats #id !important rules via higher specificity */
+.hidden,
 .force-hidden,
 #lobby.force-hidden,
 #game-ui.force-hidden {
@@ -251,7 +252,8 @@ body {
     width: 100%;
 }
 
-.preset-chip {
+.preset-chip,
+.player-chip {
     flex: 1;
     padding: 8px 6px;
     background: rgba(255, 255, 255, 0.06);
@@ -266,12 +268,14 @@ body {
     text-align: center;
 }
 
-.preset-chip:hover {
+.preset-chip:hover,
+.player-chip:hover {
     background: rgba(255, 255, 255, 0.15);
     color: #fff;
 }
 
-.preset-chip.active {
+.preset-chip.active,
+.player-chip.active {
     background: var(--secondary-color);
     color: #0d0a21;
     border-color: var(--secondary-color);

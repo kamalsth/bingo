@@ -14,6 +14,7 @@ interface Room {
     players: Player[];
     hostId: string | null;
     maxNumber: number;
+    maxPlayers: number;
     drawnNumbers: Set<number>;
     gameStarted: boolean;
     winner: string | null;
@@ -22,18 +23,19 @@ interface Room {
 
 // Client → Server
 interface ClientToServerEvents {
-    createRoom: (payload: { roomId: string; playerName: string; maxNumber: number }) => void;
+    createRoom: (payload: { roomId: string; playerName: string; maxNumber: number; maxPlayers?: number }) => void;
     joinRoom: (payload: { roomId: string; playerName: string }) => void;
     drawNumber: (payload: { roomId: string; number: number }) => void;
     claimWin: (payload: { roomId: string }) => void;
     restartGame: (payload: { roomId: string }) => void;
+    startGameEarly: (payload: { roomId: string }) => void;
 }
 
 // Server → Client
 interface ServerToClientEvents {
     roomFull: () => void;
     roomError: (payload: { message: string }) => void;
-    roomUpdated: (payload: { players: Player[]; gameStarted: boolean; hostId: string | null }) => void;
+    roomUpdated: (payload: { players: Player[]; gameStarted: boolean; hostId: string | null; maxPlayers: number }) => void;
     gameStarted: (payload: { maxNumber: number }) => void;
     numberDrawn: (payload: { drawnNumber: number; letter: string }) => void;
     drawError: (payload: { message: string }) => void;
@@ -58,11 +60,12 @@ app.use(express.static(path.join(__dirname, '..')));
 
 const rooms: Record<string, Room> = {};
 
-function createGameState(maxNumber: number): Room {
+function createGameState(maxNumber: number, maxPlayers: number): Room {
     return {
         players: [],
         hostId: null,
         maxNumber,
+        maxPlayers,
         drawnNumbers: new Set<number>(),
         gameStarted: false,
         winner: null,
@@ -103,10 +106,11 @@ function startGame(roomId: string): void {
 io.on('connection', (socket: Socket<ClientToServerEvents, ServerToClientEvents>) => {
     console.log(`User connected: ${socket.id}`);
 
-    socket.on('createRoom', ({ roomId, playerName, maxNumber }) => {
+    socket.on('createRoom', ({ roomId, playerName, maxNumber, maxPlayers }) => {
         const cleanRoomId = (roomId || '').trim();
         const cleanName = (playerName || '').trim();
         const parsedMax = Number(maxNumber);
+        const parsedPlayers = Math.min(5, Math.max(2, Number(maxPlayers) || 2));
 
         if (!cleanName || !cleanRoomId) {
             socket.emit('roomError', { message: 'Please enter both your name and a room ID.' });
@@ -125,17 +129,18 @@ io.on('connection', (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
         }
 
         socket.join(cleanRoomId);
-        rooms[cleanRoomId] = createGameState(parsedMax);
+        rooms[cleanRoomId] = createGameState(parsedMax, parsedPlayers);
         const room = rooms[cleanRoomId];
         room.hostId = socket.id;
         room.players.push({ id: socket.id, name: cleanName });
 
-        console.log(`${cleanName} created room ${cleanRoomId} (max: ${room.maxNumber})`);
+        console.log(`${cleanName} created room ${cleanRoomId} (maxNum: ${room.maxNumber}, maxPlayers: ${room.maxPlayers})`);
 
         io.to(cleanRoomId).emit('roomUpdated', {
             players: room.players,
             gameStarted: room.gameStarted,
             hostId: room.hostId,
+            maxPlayers: room.maxPlayers,
         });
     });
 
@@ -154,7 +159,7 @@ io.on('connection', (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
             return;
         }
 
-        if (room.players.length >= 2) {
+        if (room.players.length >= room.maxPlayers) {
             socket.emit('roomFull');
             return;
         }
@@ -166,16 +171,24 @@ io.on('connection', (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
 
         socket.join(cleanRoomId);
         room.players.push({ id: socket.id, name: cleanName });
-        console.log(`${cleanName} joined room ${cleanRoomId} (max: ${room.maxNumber})`);
+        console.log(`${cleanName} joined room ${cleanRoomId} (${room.players.length}/${room.maxPlayers} players)`);
 
         io.to(cleanRoomId).emit('roomUpdated', {
             players: room.players,
             gameStarted: room.gameStarted,
             hostId: room.hostId,
+            maxPlayers: room.maxPlayers,
         });
 
-        if (room.players.length === 2 && !room.gameStarted) {
+        if (room.players.length === room.maxPlayers && !room.gameStarted) {
             startGame(cleanRoomId);
+        }
+    });
+
+    socket.on('startGameEarly', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (room && socket.id === room.hostId && room.players.length >= 2 && !room.gameStarted) {
+            startGame(roomId);
         }
     });
 
@@ -228,7 +241,7 @@ io.on('connection', (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
     socket.on('restartGame', ({ roomId }) => {
         const room = rooms[roomId];
         // Only restart if the room exists and players are still there
-        if (room && room.players.length === 2) {
+        if (room && room.players.length >= 2) {
             startGame(roomId);
         }
     });
@@ -240,6 +253,9 @@ io.on('connection', (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
             const idx = room.players.findIndex(p => p.id === socket.id);
             if (idx !== -1) {
                 const [departed] = room.players.splice(idx, 1);
+                if (room.hostId === socket.id && room.players.length > 0) {
+                    room.hostId = room.players[0].id;
+                }
                 if (room.gameStarted) {
                     room.gameStarted = false;
                     io.to(roomId).emit('playerLeft', { playerName: departed.name });
@@ -248,6 +264,7 @@ io.on('connection', (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
                     players: room.players,
                     gameStarted: room.gameStarted,
                     hostId: room.hostId,
+                    maxPlayers: room.maxPlayers,
                 });
                 if (room.players.length === 0) {
                     delete rooms[roomId];

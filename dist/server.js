@@ -17,11 +17,12 @@ app.use(express_1.default.static(path_1.default.join(__dirname, '../public')));
 app.use(express_1.default.static(path_1.default.join(__dirname, '..')));
 // ─── Game State ───────────────────────────────────────────────────────────────
 const rooms = {};
-function createGameState(maxNumber) {
+function createGameState(maxNumber, maxPlayers) {
     return {
         players: [],
         hostId: null,
         maxNumber,
+        maxPlayers,
         drawnNumbers: new Set(),
         gameStarted: false,
         winner: null,
@@ -59,10 +60,11 @@ function startGame(roomId) {
 // ─── Socket Handlers ──────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
-    socket.on('createRoom', ({ roomId, playerName, maxNumber }) => {
+    socket.on('createRoom', ({ roomId, playerName, maxNumber, maxPlayers }) => {
         const cleanRoomId = (roomId || '').trim();
         const cleanName = (playerName || '').trim();
         const parsedMax = Number(maxNumber);
+        const parsedPlayers = Math.min(5, Math.max(2, Number(maxPlayers) || 2));
         if (!cleanName || !cleanRoomId) {
             socket.emit('roomError', { message: 'Please enter both your name and a room ID.' });
             return;
@@ -77,15 +79,16 @@ io.on('connection', (socket) => {
             return;
         }
         socket.join(cleanRoomId);
-        rooms[cleanRoomId] = createGameState(parsedMax);
+        rooms[cleanRoomId] = createGameState(parsedMax, parsedPlayers);
         const room = rooms[cleanRoomId];
         room.hostId = socket.id;
         room.players.push({ id: socket.id, name: cleanName });
-        console.log(`${cleanName} created room ${cleanRoomId} (max: ${room.maxNumber})`);
+        console.log(`${cleanName} created room ${cleanRoomId} (maxNum: ${room.maxNumber}, maxPlayers: ${room.maxPlayers})`);
         io.to(cleanRoomId).emit('roomUpdated', {
             players: room.players,
             gameStarted: room.gameStarted,
             hostId: room.hostId,
+            maxPlayers: room.maxPlayers,
         });
     });
     socket.on('joinRoom', ({ roomId, playerName }) => {
@@ -100,7 +103,7 @@ io.on('connection', (socket) => {
             socket.emit('roomError', { message: `Room "${cleanRoomId}" does not exist. Please create it first.` });
             return;
         }
-        if (room.players.length >= 2) {
+        if (room.players.length >= room.maxPlayers) {
             socket.emit('roomFull');
             return;
         }
@@ -110,14 +113,21 @@ io.on('connection', (socket) => {
         }
         socket.join(cleanRoomId);
         room.players.push({ id: socket.id, name: cleanName });
-        console.log(`${cleanName} joined room ${cleanRoomId} (max: ${room.maxNumber})`);
+        console.log(`${cleanName} joined room ${cleanRoomId} (${room.players.length}/${room.maxPlayers} players)`);
         io.to(cleanRoomId).emit('roomUpdated', {
             players: room.players,
             gameStarted: room.gameStarted,
             hostId: room.hostId,
+            maxPlayers: room.maxPlayers,
         });
-        if (room.players.length === 2 && !room.gameStarted) {
+        if (room.players.length === room.maxPlayers && !room.gameStarted) {
             startGame(cleanRoomId);
+        }
+    });
+    socket.on('startGameEarly', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (room && socket.id === room.hostId && room.players.length >= 2 && !room.gameStarted) {
+            startGame(roomId);
         }
     });
     socket.on('drawNumber', ({ roomId, number }) => {
@@ -164,7 +174,7 @@ io.on('connection', (socket) => {
     socket.on('restartGame', ({ roomId }) => {
         const room = rooms[roomId];
         // Only restart if the room exists and players are still there
-        if (room && room.players.length === 2) {
+        if (room && room.players.length >= 2) {
             startGame(roomId);
         }
     });
@@ -175,6 +185,9 @@ io.on('connection', (socket) => {
             const idx = room.players.findIndex(p => p.id === socket.id);
             if (idx !== -1) {
                 const [departed] = room.players.splice(idx, 1);
+                if (room.hostId === socket.id && room.players.length > 0) {
+                    room.hostId = room.players[0].id;
+                }
                 if (room.gameStarted) {
                     room.gameStarted = false;
                     io.to(roomId).emit('playerLeft', { playerName: departed.name });
@@ -183,6 +196,7 @@ io.on('connection', (socket) => {
                     players: room.players,
                     gameStarted: room.gameStarted,
                     hostId: room.hostId,
+                    maxPlayers: room.maxPlayers,
                 });
                 if (room.players.length === 0) {
                     delete rooms[roomId];

@@ -35,9 +35,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const createRoomBtn = getEl('create-room-btn');
     const joinRoomBtn = getEl('join-room-btn');
     const presetChips = document.querySelectorAll('.preset-chip');
+    const playerChips = document.querySelectorAll('.player-chip');
     const lobbyMessage = getEl('lobby-message');
     // ── Game refs ─────────────────────────────────────────────────────────────
     const roomStatus = getEl('room-status');
+    const startEarlyBtn = getEl('start-early-btn');
     const playerNamesEl = getEl('player-names');
     const winnerNameDisplay = getEl('winner-name-display');
     const boardElement = getEl('bingo-board');
@@ -50,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const BINGO_LETTERS = ['B', 'I', 'N', 'G', 'O'];
     let RANGES = [];
     let maxNumber = 25;
+    let selectedMaxPlayers = 2;
     let board = [];
     let calledNumbers = new Set();
     let gameOver = false;
@@ -99,6 +102,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+    // ── Player Count Presets ──────────────────────────────────────────────────
+    playerChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            playerChips.forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            selectedMaxPlayers = parseInt(chip.dataset['players'] ?? '2', 10);
+        });
+    });
     // ── Create Room ───────────────────────────────────────────────────────────
     createRoomBtn.addEventListener('click', () => {
         const playerName = playerNameInput.value.trim();
@@ -123,8 +134,15 @@ document.addEventListener('DOMContentLoaded', () => {
         gameUI.classList.remove('force-hidden');
         gameUI.style.display = 'grid';
         playerNamesEl.textContent = playerName;
-        roomStatus.textContent = `Room "${roomId}" • Waiting for opponent to join...`;
-        socket.emit('createRoom', { roomId, playerName, maxNumber: parsedMax });
+        startEarlyBtn.classList.add('hidden');
+        startEarlyBtn.style.display = 'none';
+        roomStatus.textContent = `Room "${roomId}" • Waiting for players (1/${selectedMaxPlayers})...`;
+        socket.emit('createRoom', {
+            roomId,
+            playerName,
+            maxNumber: parsedMax,
+            maxPlayers: selectedMaxPlayers
+        });
         currentRoom = roomId;
     });
     // ── Join Room ─────────────────────────────────────────────────────────────
@@ -145,6 +163,8 @@ document.addEventListener('DOMContentLoaded', () => {
         gameUI.classList.remove('force-hidden');
         gameUI.style.display = 'grid';
         playerNamesEl.textContent = playerName;
+        startEarlyBtn.classList.add('hidden');
+        startEarlyBtn.style.display = 'none';
         roomStatus.textContent = `Joining room "${roomId}"...`;
         socket.emit('joinRoom', { roomId, playerName });
         currentRoom = roomId;
@@ -160,10 +180,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter')
             joinRoomBtn.click();
     });
-    // ── Restart ───────────────────────────────────────────────────────────────
+    // ── Restart & Start Early ─────────────────────────────────────────────────
     restartBtn.addEventListener('click', () => {
         if (currentRoom) {
             socket.emit('restartGame', { roomId: currentRoom });
+        }
+    });
+    startEarlyBtn.addEventListener('click', () => {
+        if (currentRoom && isHost) {
+            startEarlyBtn.classList.add('hidden');
+            startEarlyBtn.style.display = 'none';
+            socket.emit('startGameEarly', { roomId: currentRoom });
         }
     });
     // ── Socket events ─────────────────────────────────────────────────────────
@@ -171,28 +198,58 @@ document.addEventListener('DOMContentLoaded', () => {
         gameUI.classList.add('force-hidden');
         lobby.classList.remove('force-hidden');
         lobbyMessage.textContent = message;
+        startEarlyBtn.classList.add('hidden');
+        startEarlyBtn.style.display = 'none';
     });
     socket.on('roomFull', () => {
         gameUI.classList.add('force-hidden');
         lobby.classList.remove('force-hidden');
         lobbyMessage.textContent = 'Room is full! Try a different one.';
+        startEarlyBtn.classList.add('hidden');
+        startEarlyBtn.style.display = 'none';
     });
-    socket.on('roomUpdated', ({ players, gameStarted: _started, hostId }) => {
+    socket.on('roomUpdated', ({ players, gameStarted: started, hostId, maxPlayers }) => {
         isHost = socket.id === hostId;
         const me = players.find(p => p.id === socket.id);
         playerNamesEl.textContent = me?.name ?? playerNameInput.value.trim();
-        if (players.length === 1) {
-            roomStatus.textContent = `Room "${currentRoom}" • Waiting for opponent to join...`;
+        if (!started) {
+            const target = maxPlayers || selectedMaxPlayers || 2;
+            if (players.length < target) {
+                roomStatus.textContent = `Room "${currentRoom}" • Waiting for players (${players.length}/${target})...`;
+                // Only the host can start early if all players haven't joined yet
+                if (isHost && players.length >= 2) {
+                    startEarlyBtn.classList.remove('hidden');
+                    startEarlyBtn.style.display = 'inline-block';
+                    startEarlyBtn.textContent = `Start Game Now (${players.length} players)`;
+                }
+                else {
+                    startEarlyBtn.classList.add('hidden');
+                    startEarlyBtn.style.display = 'none';
+                }
+            }
+            else {
+                roomStatus.textContent = 'All players joined! Starting game...';
+                startEarlyBtn.classList.add('hidden');
+                startEarlyBtn.style.display = 'none';
+            }
+        }
+        else {
+            startEarlyBtn.classList.add('hidden');
+            startEarlyBtn.style.display = 'none';
         }
     });
     socket.on('gameStarted', ({ maxNumber: serverMax }) => {
         maxNumber = serverMax;
         RANGES = buildRanges(maxNumber);
+        startEarlyBtn.classList.add('hidden');
+        startEarlyBtn.style.display = 'none';
         initGame();
     });
     socket.on('turnChanged', ({ currentPlayerId, currentPlayerName }) => {
         isMyTurn = socket.id === currentPlayerId;
         drawError.textContent = '';
+        startEarlyBtn.classList.add('hidden');
+        startEarlyBtn.style.display = 'none';
         if (isMyTurn) {
             roomStatus.textContent = 'Your turn to draw! Click an uncalled number on your board.';
         }
