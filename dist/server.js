@@ -174,7 +174,7 @@ io.on('connection', (socket) => {
     socket.on('restartGame', ({ roomId }) => {
         const room = rooms[roomId];
         // Only restart if the room exists and players are still there
-        if (room && room.players.length === 2) {
+        if (room && room.players.length >= 2) {
             startGame(roomId);
         }
     });
@@ -185,6 +185,9 @@ io.on('connection', (socket) => {
             const idx = room.players.findIndex(p => p.id === socket.id);
             if (idx !== -1) {
                 const [departed] = room.players.splice(idx, 1);
+                if (room.hostId === socket.id && room.players.length > 0) {
+                    room.hostId = room.players[0].id;
+                }
                 if (room.gameStarted) {
                     room.gameStarted = false;
                     io.to(roomId).emit('playerLeft', { playerName: departed.name });
